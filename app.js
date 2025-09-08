@@ -1,37 +1,80 @@
-// Import Express.js
-const express = require('express');
-
-// Create an Express app
+const express = require("express");
+const axios = require("axios");
 const app = express();
-
-// Middleware to parse JSON bodies
 app.use(express.json());
 
-// Set port and verify_token
-const port = process.env.PORT || 3000;
-const verifyToken = process.env.VERIFY_TOKEN;
+const VERIFY_TOKEN = "6c033b1b54bb1faa8ff683a76977cdde";
+const WHATSAPP_TOKEN = "6c033b1b54bb1faa8ff683a76977cdde";
+const PHONE_NUMBER_ID = "967775954444";
 
-// Route for GET requests
-app.get('/', (req, res) => {
-  const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': token } = req.query;
+let receivedMessages = [];
 
-  if (mode === 'subscribe' && token === verifyToken) {
-    console.log('WEBHOOK VERIFIED');
-    res.status(200).send(challenge);
-  } else {
-    res.status(403).end();
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Webhook verified successfully");
+    return res.status(200).send(challenge);
   }
+  console.log("Webhook verification failed");
+  return res.sendStatus(403);
 });
 
-// Route for POST requests
-app.post('/', (req, res) => {
-  const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-  console.log(`\n\nWebhook received ${timestamp}\n`);
-  console.log(JSON.stringify(req.body, null, 2));
-  res.status(200).end();
+app.post("/webhook", async (req, res) => {
+  const data = req.body;
+
+  if (data.entry) {
+    data.entry.forEach((entry) => {
+      entry.changes.forEach(async (change) => {
+        const messages = change.value.messages;
+        if (messages) {
+          for (const msg of messages) {
+            const sender = msg.from;
+            const text = msg.text?.body;
+            const timestamp = new Date();
+
+            receivedMessages.push({ sender, text, timestamp });
+            console.log(`New message from ${sender}: ${text}`);
+
+            if (text) {
+              await sendWhatsAppMessage(sender, `تم استلام رسالتك: "${text}"`);
+            }
+          }
+        }
+      });
+    });
+  }
+
+  res.sendStatus(200);
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`\nListening on port ${port}\n`);
+app.get("/messages", (req, res) => {
+  res.json(receivedMessages);
 });
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+async function sendWhatsAppMessage(to, message) {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: to,
+        text: { body: message },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log(`Sent reply to ${to}`);
+  } catch (error) {
+    console.error("Error sending reply:", error.response?.data || error.message);
+  }
+}

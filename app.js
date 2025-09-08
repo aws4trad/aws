@@ -1,14 +1,17 @@
+// app.js
 const express = require("express");
 const axios = require("axios");
 const app = express();
 app.use(express.json());
 
+// ✅ Ready values
 const VERIFY_TOKEN = "6c033b1b54bb1faa8ff683a76977cdde";
 const WHATSAPP_TOKEN = "6c033b1b54bb1faa8ff683a76977cdde";
 const PHONE_NUMBER_ID = "967775954444";
 
 let receivedMessages = [];
 
+// Webhook verification
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -22,6 +25,7 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
+// Receive incoming messages and send auto-reply
 app.post("/webhook", async (req, res) => {
   const data = req.body;
 
@@ -39,7 +43,7 @@ app.post("/webhook", async (req, res) => {
             console.log(`New message from ${sender}: ${text}`);
 
             if (text) {
-              await sendWhatsAppMessage(sender, `تم استلام رسالتك: "${text}"`);
+              await sendWhatsAppMessage(sender, `Your message has been received: "${text}"`);
             }
           }
         }
@@ -50,13 +54,16 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+// Page to display all received messages
 app.get("/messages", (req, res) => {
   res.json(receivedMessages);
 });
 
+// Start server with correct port
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+// Function to send WhatsApp message via Cloud API
 async function sendWhatsAppMessage(to, message) {
   try {
     await axios.post(
